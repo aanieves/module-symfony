@@ -249,12 +249,15 @@ trait EventsAssertionsTrait
             Assert::fail('No event listener was called.');
         }
 
+        // Optimized: Single-pass indexing - build both indexes in one loop
+        // Eliminates array_column overhead and combines two iterations into one
         $listenersByEvent = [];
+        $allEventListeners = [];
         foreach ($actualEvents as $actualEvent) {
-            $listenersByEvent[$actualEvent['event']][] = $actualEvent['pretty'];
+            $pretty = $actualEvent['pretty'];
+            $allEventListeners[] = $pretty;
+            $listenersByEvent[$actualEvent['event']][] = $pretty;
         }
-        /** @var list<string> $allEventListeners */
-        $allEventListeners = array_column($actualEvents, 'pretty');
 
         foreach ($expectedListeners as $listener) {
             $listenerName = match (true) {

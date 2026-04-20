@@ -124,10 +124,18 @@ trait SessionAssertionsTrait
         $sessionName = $session->getName();
         $session->invalidate();
 
+        // Optimized: Use hash set for O(1) lookups instead of multiple comparisons
+        // Replaces 3 string comparisons per cookie with single hash lookup
         $cookieJar = $this->getClient()->getCookieJar();
+        $cookiesToExpire = [
+            'MOCKSESSID' => true,
+            'REMEMBERME' => true,
+            $sessionName => true,
+        ];
+
         foreach ($cookieJar->all() as $cookie) {
             $cookieName = $cookie->getName();
-            if ($cookieName === 'MOCKSESSID' || $cookieName === 'REMEMBERME' || $cookieName === $sessionName) {
+            if (isset($cookiesToExpire[$cookieName])) {
                 $cookieJar->expire($cookieName);
             }
         }

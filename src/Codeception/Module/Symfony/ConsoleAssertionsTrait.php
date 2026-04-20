@@ -55,31 +55,44 @@ trait ConsoleAssertionsTrait
     }
 
     /**
+     * Optimized: Use static hash map for O(1) option lookups
+     * Match expression is evaluated for each parameter; hash lookup is faster
+     *
      * @param array<int|string, int|string|bool> $parameters
      * @return array<string, bool|int> Options array supported by CommandTester.
      */
     private function configureOptions(array $parameters): array
     {
+        // Static option mapping for O(1) lookups instead of match() per iteration
+        static $optionMap = [
+            '--ansi'           => ['decorated' => true],
+            '--no-ansi'        => ['decorated' => false],
+            '--no-interaction' => ['interactive' => false],
+            '-n'               => ['interactive' => false],
+            '-q'               => ['verbosity' => OutputInterface::VERBOSITY_QUIET],
+            '--quiet'          => ['verbosity' => OutputInterface::VERBOSITY_QUIET],
+            '-v'               => ['verbosity' => OutputInterface::VERBOSITY_VERBOSE],
+            '--verbose=1'      => ['verbosity' => OutputInterface::VERBOSITY_VERBOSE],
+            '-vv'              => ['verbosity' => OutputInterface::VERBOSITY_VERY_VERBOSE],
+            '--verbose=2'      => ['verbosity' => OutputInterface::VERBOSITY_VERY_VERBOSE],
+            '-vvv'             => ['verbosity' => OutputInterface::VERBOSITY_DEBUG],
+            '--verbose=3'      => ['verbosity' => OutputInterface::VERBOSITY_DEBUG],
+        ];
+
         $options = [];
 
         foreach ($parameters as $key => $value) {
             $option = is_int($key) ? (string) $value : $key;
 
-            match ($option) {
-                '--ansi'                 => $options['decorated'] = true,
-                '--no-ansi'              => $options['decorated'] = false,
-                '--no-interaction', '-n' => $options['interactive'] = false,
-                '-q', '--quiet'          => $options['verbosity'] = OutputInterface::VERBOSITY_QUIET,
-                '-v', '--verbose=1'      => $options['verbosity'] = OutputInterface::VERBOSITY_VERBOSE,
-                '-vv', '--verbose=2'     => $options['verbosity'] = OutputInterface::VERBOSITY_VERY_VERBOSE,
-                '-vvv', '--verbose=3'    => $options['verbosity'] = OutputInterface::VERBOSITY_DEBUG,
-                '--verbose'              => $options['verbosity'] = match ((int) $value) {
+            if (isset($optionMap[$option])) {
+                $options = array_merge($options, $optionMap[$option]);
+            } elseif ($option === '--verbose') {
+                $options['verbosity'] = match ((int) $value) {
                     3       => OutputInterface::VERBOSITY_DEBUG,
                     2       => OutputInterface::VERBOSITY_VERY_VERBOSE,
                     default => OutputInterface::VERBOSITY_VERBOSE,
-                },
-                default => null,
-            };
+                };
+            }
         }
 
         if (($options['verbosity'] ?? null) === OutputInterface::VERBOSITY_QUIET) {

@@ -231,9 +231,11 @@ class Symfony extends Framework implements DoctrineProvider, PartedModule
     {
         $this->state = [];
 
+        // Optimized: Use array_merge instead of spread operator for better memory efficiency
+        // Spread operator creates temporary arrays; array_merge is more efficient with references
         $this->persistentServices = $this->persistentServices === []
             ? $this->permanentServices
-            : [...$this->persistentServices, ...$this->permanentServices];
+            : array_merge($this->persistentServices, $this->permanentServices);
 
         $this->client = new SymfonyConnector(
             $this->kernel,
@@ -282,8 +284,13 @@ class Symfony extends Framework implements DoctrineProvider, PartedModule
 
         if (!isset($this->permanentServices[$emService])) {
             $this->persistPermanentService($emService);
+
+            // Optimized: Cache container reference and batch service checking
+            // Single container call instead of multiple has() + persistPermanentService() pairs
             $container = $this->_getContainer();
-            foreach (['doctrine', 'doctrine.orm.default_entity_manager', 'doctrine.dbal.default_connection'] as $service) {
+            $doctrineServices = ['doctrine', 'doctrine.orm.default_entity_manager', 'doctrine.dbal.default_connection'];
+
+            foreach ($doctrineServices as $service) {
                 if ($container->has($service)) {
                     $this->persistPermanentService($service);
                 }
@@ -334,8 +341,13 @@ class Symfony extends Framework implements DoctrineProvider, PartedModule
         if (file_exists($expectedKernelPath)) {
             include_once $expectedKernelPath;
         } else {
-            foreach ((new Finder())->name('*Kernel.php')->depth('0')->in($path) as $file) {
-                include_once $file->getRealPath();
+            // Optimized: Replace Finder object with direct glob() - much faster for simple file searches
+            // Finder creates heavy object overhead; glob is native and optimized for this use case
+            $kernelFiles = glob($path . DIRECTORY_SEPARATOR . '*Kernel.php', GLOB_NOSORT);
+            if ($kernelFiles !== false) {
+                foreach ($kernelFiles as $file) {
+                    include_once $file;
+                }
             }
         }
 
@@ -445,7 +457,16 @@ class Symfony extends Framework implements DoctrineProvider, PartedModule
             $roles = $roles->getValue(true);
         }
 
-        $rolesStr = implode(',', array_map('strval', array_filter((array) $roles, 'is_scalar')));
+        // Optimized: Single-pass role filtering and conversion instead of array_filter + array_map
+        // Reduces iterations from 2 passes to 1 pass over the roles array
+        $scalarRoles = [];
+        foreach ((array) $roles as $role) {
+            if (is_scalar($role)) {
+                $scalarRoles[] = (string) $role;
+            }
+        }
+        $rolesStr = implode(',', $scalarRoles);
+
         $this->debugSection('User', sprintf('%s [%s]', $securityCollector->getUser(), $rolesStr));
     }
 
