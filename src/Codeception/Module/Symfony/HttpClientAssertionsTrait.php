@@ -10,7 +10,6 @@ use Symfony\Component\HttpClient\DataCollector\HttpClientDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
 
 use function array_change_key_case;
-use function array_intersect_key;
 use function is_array;
 use function is_object;
 use function method_exists;
@@ -124,9 +123,19 @@ trait HttpClientAssertionsTrait
             }
 
             $actualHeaders = $this->extractValue($options['headers'] ?? []);
-            if (is_array($actualHeaders) && $expectedHeadersLower === array_intersect_key(array_change_key_case($actualHeaders), $expectedHeadersLower)) {
-                return true;
+            if (!is_array($actualHeaders)) {
+                continue;
             }
+
+            /** @var array<string, mixed> $actualHeadersLower */
+            $actualHeadersLower = array_change_key_case($actualHeaders);
+            foreach ($expectedHeadersLower as $headerName => $expectedHeaderValue) {
+                if (($actualHeadersLower[$headerName] ?? null) !== $expectedHeaderValue) {
+                    continue 2;
+                }
+            }
+
+            return true;
         }
 
         return false;

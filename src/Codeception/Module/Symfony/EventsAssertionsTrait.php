@@ -249,6 +249,13 @@ trait EventsAssertionsTrait
             Assert::fail('No event listener was called.');
         }
 
+        $listenersByEvent = [];
+        foreach ($actualEvents as $actualEvent) {
+            $listenersByEvent[$actualEvent['event']][] = $actualEvent['pretty'];
+        }
+        /** @var list<string> $allEventListeners */
+        $allEventListeners = array_column($actualEvents, 'pretty');
+
         foreach ($expectedListeners as $listener) {
             $listenerName = match (true) {
                 is_array($listener) && isset($listener[0]) => is_string($listener[0]) ? $listener[0] : (is_object($listener[0]) ? $listener[0]::class : 'array'),
@@ -259,26 +266,28 @@ trait EventsAssertionsTrait
 
             foreach ($expectedEvents as $event) {
                 $eventStr = (string) $event;
+                $wasCalled = $event === null
+                    ? $this->hasListenerPrefix($allEventListeners, $listenerName)
+                    : $this->hasListenerPrefix($listenersByEvent[$event] ?? [], $listenerName);
+
                 $this->assertSame(
                     $shouldBeCalled,
-                    $this->listenerWasCalled($listenerName, $event, $actualEvents),
+                    $wasCalled,
                     sprintf("The '%s' listener was %scalled%s", $listenerName, $shouldBeCalled ? 'not ' : '', $event ? " for the '{$eventStr}' event" : '')
                 );
             }
         }
     }
 
-    /** @param list<array{event: string, pretty: string}> $actualEvents */
-    private function listenerWasCalled(string $expectedListener, ?string $expectedEvent, array $actualEvents): bool
+    /** @param list<string> $listeners */
+    private function hasListenerPrefix(array $listeners, string $listenerName): bool
     {
-        foreach ($actualEvents as $actualEvent) {
-            if ($expectedEvent !== null && $actualEvent['event'] !== $expectedEvent) {
-                continue;
-            }
-            if (str_starts_with($actualEvent['pretty'], $expectedListener)) {
+        foreach ($listeners as $actualListener) {
+            if (str_starts_with($actualListener, $listenerName)) {
                 return true;
             }
         }
+
         return false;
     }
 

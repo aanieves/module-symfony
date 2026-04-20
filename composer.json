@@ -97,6 +97,7 @@
     "scripts": {
         "phpstan": "phpstan analyse src --level=max --memory-limit=1G",
         "cs-check": "php-cs-fixer fix src --dry-run --diff --using-cache=no",
-        "cs-fix": "php-cs-fixer fix src --using-cache=no"
+        "cs-fix": "php-cs-fixer fix src --using-cache=no",
+        "perf-benchmark": "php tools/perf-benchmark.php"
     }
 }

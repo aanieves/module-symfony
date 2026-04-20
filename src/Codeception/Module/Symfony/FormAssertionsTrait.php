@@ -8,15 +8,21 @@ use PHPUnit\Framework\Assert;
 use Symfony\Component\Form\Extension\DataCollector\FormDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
 
+use function array_key_exists;
 use function implode;
 use function is_array;
 use function is_int;
 use function is_numeric;
 use function is_string;
+use function spl_object_id;
 use function sprintf;
 
 trait FormAssertionsTrait
 {
+    /** @var array<string, list<string>> */
+    private array $formFieldErrorIndex = [];
+    private int $formFieldErrorIndexCollectorId = 0;
+
     /**
      * Asserts that value of the field of the first form matching the given selector does equal the expected value.
      *
@@ -176,39 +182,51 @@ trait FormAssertionsTrait
     private function getErrorsForField(string $field): array
     {
         $collector = $this->grabFormCollector('seeFormErrorMessage');
-        $formsData = $this->getRawCollectorData($collector)['forms'] ?? [];
-        if (!is_array($formsData)) {
-            return [];
+        $collectorId = spl_object_id($collector);
+
+        if ($this->formFieldErrorIndexCollectorId !== $collectorId) {
+            $this->rebuildFormFieldErrorIndex($collector, $collectorId);
         }
 
-        $errorsForField = [];
-        $fieldFound = false;
+        if (!array_key_exists($field, $this->formFieldErrorIndex)) {
+            Assert::fail("The field '{$field}' does not exist in the form.");
+        }
+
+        return $this->formFieldErrorIndex[$field];
+    }
+
+    private function rebuildFormFieldErrorIndex(FormDataCollector $collector, int $collectorId): void
+    {
+        $this->formFieldErrorIndexCollectorId = $collectorId;
+        $this->formFieldErrorIndex = [];
+
+        $formsData = $this->getRawCollectorData($collector)['forms'] ?? null;
+        if (!is_array($formsData)) {
+            return;
+        }
 
         foreach ($formsData as $form) {
-            if (!is_array($form) || !isset($form['children']) || !is_array($form['children'])) {
+            $children = is_array($form) ? ($form['children'] ?? null) : null;
+            if (!is_array($children)) {
                 continue;
             }
 
-            foreach ($form['children'] as $child) {
-                if (!is_array($child) || ($child['name'] ?? null) !== $field) {
+            foreach ($children as $child) {
+                $fieldName = is_array($child) ? ($child['name'] ?? null) : null;
+                if (!is_string($fieldName)) {
                     continue;
                 }
-                $fieldFound = true;
-                if (isset($child['errors']) && is_array($child['errors'])) {
-                    foreach ($child['errors'] as $error) {
-                        if (is_array($error) && isset($error['message']) && is_string($error['message'])) {
-                            $errorsForField[] = $error['message'];
-                        }
+
+                $this->formFieldErrorIndex[$fieldName] ??= [];
+
+                $errors = is_array($child['errors'] ?? null) ? $child['errors'] : [];
+                foreach ($errors as $error) {
+                    if (is_array($error) && isset($error['message']) && is_string($error['message'])) {
+                        $this->formFieldErrorIndex[$fieldName][] = $error['message'];
                     }
                 }
             }
         }
-
-        if (!$fieldFound) {
-            Assert::fail("The field '{$field}' does not exist in the form.");
-        }
-
-        return $errorsForField;
     }
 
     /** @return array<string, mixed> */

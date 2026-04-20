@@ -9,6 +9,7 @@ use Symfony\Component\HttpKernel\Profiler\Profile;
 
 use function array_unique;
 use function array_values;
+use function is_string;
 
 trait CacheTrait
 {
@@ -39,12 +40,17 @@ trait CacheTrait
         }
 
         $domains = [];
+        /** @var array<string, string> $hostRegexMap */
+        $hostRegexMap = [];
         foreach ($this->grabRouterService()->getRouteCollection() as $route) {
-            if ($route->getHost() !== '') {
-                $regex = $route->compile()->getHostRegex();
-                if ($regex !== null && $regex !== '') {
-                    $domains[] = $regex;
-                }
+            $host = $route->getHost();
+            if ($host === '') {
+                continue;
+            }
+
+            $hostRegex = $hostRegexMap[$host] ??= (string) ($route->compile()->getHostRegex() ?? '');
+            if ($hostRegex !== '') {
+                $domains[] = $hostRegex;
             }
         }
 

@@ -62,7 +62,7 @@ class Symfony extends HttpKernelBrowser
         $this->persistDoctrineConnections();
 
         if ($this->kernel instanceof Kernel) {
-            $this->ensureKernelShutdown();
+            $this->kernel->shutdown();
             $this->kernel->boot();
         }
 
@@ -79,12 +79,6 @@ class Symfony extends HttpKernelBrowser
         }
 
         $this->getProfiler()?->enable();
-    }
-
-    protected function ensureKernelShutdown(): void
-    {
-        $this->kernel->boot();
-        $this->kernel->shutdown();
     }
 
     private function resolveContainer(): ContainerInterface

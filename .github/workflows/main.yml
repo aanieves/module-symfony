@@ -42,6 +42,10 @@ jobs:
         if: matrix.symfony == '8.0'
         run: composer validate --strict && composer audit && composer cs-check && composer phpstan
 
+      - name: Performance benchmark
+        if: matrix.symfony == '8.0'
+        run: PERF_RUNS=2 PERF_WARMUP_RUNS=1 PERF_MAX_AVG_MS=3500 composer perf-benchmark
+
       - name: Run module tests
         run: vendor/bin/phpunit tests ${{ matrix.symfony == '8.0' && '--coverage-text --coverage-filter src' || '' }}
 
