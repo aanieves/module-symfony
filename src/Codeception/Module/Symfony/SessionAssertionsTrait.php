@@ -27,6 +27,8 @@ use function sprintf;
 
 trait SessionAssertionsTrait
 {
+    private ?int $symfonyMajorVersion = null;
+
     /**
      * Login with the given user object.
      * The `$user` object must have a persistent identifier.
@@ -230,6 +232,6 @@ trait SessionAssertionsTrait
 
     private function getSymfonyMajorVersion(): int
     {
-        return Kernel::MAJOR_VERSION;
+        return $this->symfonyMajorVersion ??= Kernel::MAJOR_VERSION;
     }
 }
