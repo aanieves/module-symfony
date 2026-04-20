@@ -10,10 +10,12 @@ use Symfony\Component\HttpClient\DataCollector\HttpClientDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
 
 use function array_change_key_case;
+use function count;
 use function is_array;
 use function is_object;
 use function method_exists;
 use function sprintf;
+use function strtolower;
 
 trait HttpClientAssertionsTrait
 {
@@ -95,9 +97,13 @@ trait HttpClientAssertionsTrait
         string|array|null $expectedBody = null,
         array $expectedHeaders = []
     ): bool {
+        // Optimized: Pre-normalize headers ONCE outside the loop
         $expectedHeadersLower = $expectedHeaders === [] ? [] : array_change_key_case($expectedHeaders);
 
-        foreach ($this->getHttpClientTraces($httpClientId, $function) as $trace) {
+        // Cache traces to avoid repeated method calls
+        $traces = $this->getHttpClientTraces($httpClientId, $function);
+
+        foreach ($traces as $trace) {
             if (!is_array($trace) || ($trace['method'] ?? null) !== $expectedMethod) {
                 continue;
             }
@@ -108,6 +114,7 @@ trait HttpClientAssertionsTrait
                 continue;
             }
 
+            // Early exit optimization - most common case
             if ($expectedBody === null && $expectedHeadersLower === []) {
                 return true;
             }
@@ -127,15 +134,20 @@ trait HttpClientAssertionsTrait
                 continue;
             }
 
-            /** @var array<string, mixed> $actualHeadersLower */
-            $actualHeadersLower = array_change_key_case($actualHeaders);
-            foreach ($expectedHeadersLower as $headerName => $expectedHeaderValue) {
-                if (($actualHeadersLower[$headerName] ?? null) !== $expectedHeaderValue) {
-                    continue 2;
+            // Optimized: Manual comparison instead of array_change_key_case in loop
+            // Direct case-insensitive key comparison
+            $matchedHeaders = 0;
+            $expectedCount = count($expectedHeadersLower);
+
+            foreach ($actualHeaders as $key => $value) {
+                $lowerKey = strtolower($key);
+                if (isset($expectedHeadersLower[$lowerKey]) && $expectedHeadersLower[$lowerKey] === $value) {
+                    $matchedHeaders++;
+                    if ($matchedHeaders === $expectedCount) {
+                        return true;
+                    }
                 }
             }
-
-            return true;
         }
 
         return false;

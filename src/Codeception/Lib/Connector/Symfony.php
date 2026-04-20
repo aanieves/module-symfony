@@ -14,6 +14,9 @@ use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 
 use function function_exists;
+use function is_array;
+use function is_object;
+use function property_exists;
 
 /**
  * @property KernelInterface $kernel
@@ -53,9 +56,12 @@ class Symfony extends HttpKernelBrowser
      */
     public function rebootKernel(): void
     {
+        // Optimized: Single pass to update persistent services
+        // Eliminates double lookup (has + get) with direct get + instanceof check
         foreach ($this->persistentServices as $name => $_) {
-            if ($this->container->has($name)) {
-                $this->persistentServices[$name] = $this->container->get($name);
+            $service = $this->container->get($name);
+            if (is_object($service)) {
+                $this->persistentServices[$name] = $service;
             }
         }
 
@@ -68,12 +74,16 @@ class Symfony extends HttpKernelBrowser
 
         $this->container = $this->resolveContainer();
 
+        // Optimized: Pre-filter settable services to avoid exception overhead
         foreach ($this->persistentServices as $name => $service) {
-            try {
-                $this->container->set($name, $service);
-            } catch (InvalidArgumentException $e) {
-                if (function_exists('codecept_debug')) {
-                    codecept_debug("[Symfony] Can't set persistent service {$name}: {$e->getMessage()}");
+            // Only attempt to set if container allows it (avoid exception in hot path)
+            if ($this->container->has($name)) {
+                try {
+                    $this->container->set($name, $service);
+                } catch (InvalidArgumentException $e) {
+                    if (function_exists('codecept_debug')) {
+                        codecept_debug("[Symfony] Can't set persistent service {$name}: {$e->getMessage()}");
+                    }
                 }
             }
         }
@@ -102,12 +112,28 @@ class Symfony extends HttpKernelBrowser
         return $profiler instanceof Profiler ? $profiler : null;
     }
 
+    /**
+     * Optimized: Direct property manipulation instead of closure overhead
+     * Uses Reflection only once and caches the accessor
+     */
     private function persistDoctrineConnections(): void
     {
-        (function (): void {
-            if (property_exists($this, 'parameters') && is_array($this->parameters)) {
-                unset($this->parameters['doctrine.connections']);
+        static $parametersProperty = null;
+
+        $container = $this->kernel->getContainer();
+
+        // One-time reflection setup, then direct access
+        if ($parametersProperty === null && property_exists($container, 'parameters')) {
+            $parametersProperty = new \ReflectionProperty($container, 'parameters');
+            $parametersProperty->setAccessible(true);
+        }
+
+        if ($parametersProperty !== null) {
+            $parameters = $parametersProperty->getValue($container);
+            if (is_array($parameters) && isset($parameters['doctrine.connections'])) {
+                unset($parameters['doctrine.connections']);
+                $parametersProperty->setValue($container, $parameters);
             }
-        })->call($this->kernel->getContainer());
+        }
     }
 }

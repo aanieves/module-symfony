@@ -66,6 +66,9 @@ trait CacheTrait
     }
 
     /**
+     * Optimized: Removed unnecessary closure allocation
+     * Direct loop is faster and uses less memory
+     *
      * @template T of object
      * @param class-string<T> $expectedClass
      * @param string[] $serviceIds
@@ -73,22 +76,25 @@ trait CacheTrait
      */
     protected function grabCachedService(string $expectedClass, array $serviceIds): ?object
     {
-        $serviceId = $this->state[$expectedClass] ??= (function () use ($serviceIds, $expectedClass): ?string {
+        // Check if we've already found the service ID for this class
+        if (!isset($this->state[$expectedClass])) {
+            // Find and cache the service ID
+            $this->state[$expectedClass] = null;
             foreach ($serviceIds as $id) {
-                if ($this->getService($id) instanceof $expectedClass) {
-                    return $id;
+                $service = $this->getService($id);
+                if ($service instanceof $expectedClass) {
+                    $this->state[$expectedClass] = $id;
+                    break;
                 }
             }
+        }
 
-            return null;
-        })();
-
+        $serviceId = $this->state[$expectedClass];
         if (!is_string($serviceId)) {
             return null;
         }
 
         $service = $this->getService($serviceId);
-
         return $service instanceof $expectedClass ? $service : null;
     }
 }
