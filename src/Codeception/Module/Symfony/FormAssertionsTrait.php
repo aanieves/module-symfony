@@ -22,6 +22,8 @@ trait FormAssertionsTrait
     /** @var array<string, list<string>> */
     private array $formFieldErrorIndex = [];
     private int $formFieldErrorIndexCollectorId = 0;
+    /** @var array<string, mixed>|null Cached raw forms data for lazy loading */
+    private ?array $cachedFormsData = null;
 
     /**
      * Asserts that value of the field of the first form matching the given selector does equal the expected value.
@@ -184,8 +186,16 @@ trait FormAssertionsTrait
         $collector = $this->grabFormCollector('seeFormErrorMessage');
         $collectorId = spl_object_id($collector);
 
+        // Invalidate cache if collector changed
         if ($this->formFieldErrorIndexCollectorId !== $collectorId) {
-            $this->rebuildFormFieldErrorIndex($collector, $collectorId);
+            $this->formFieldErrorIndexCollectorId = $collectorId;
+            $this->formFieldErrorIndex = [];
+            $this->cachedFormsData = null;
+        }
+
+        // Lazy load only the requested field
+        if (!array_key_exists($field, $this->formFieldErrorIndex)) {
+            $this->loadFieldErrors($field, $collector);
         }
 
         if (!array_key_exists($field, $this->formFieldErrorIndex)) {
@@ -195,35 +205,60 @@ trait FormAssertionsTrait
         return $this->formFieldErrorIndex[$field];
     }
 
-    private function rebuildFormFieldErrorIndex(FormDataCollector $collector, int $collectorId): void
+    /**
+     * Lazy load errors for a specific field only when requested.
+     * This eliminates O(n³) triple nested loop by processing only what's needed.
+     */
+    private function loadFieldErrors(string $field, FormDataCollector $collector): void
     {
-        $this->formFieldErrorIndexCollectorId = $collectorId;
-        $this->formFieldErrorIndex = [];
+        // Cache forms data on first access
+        if ($this->cachedFormsData === null) {
+            $this->cachedFormsData = $this->getRawCollectorData($collector)['forms'] ?? [];
+        }
 
-        $formsData = $this->getRawCollectorData($collector)['forms'] ?? null;
-        if (!is_array($formsData)) {
+        if (!is_array($this->cachedFormsData)) {
             return;
         }
 
-        foreach ($formsData as $form) {
-            $children = is_array($form) ? ($form['children'] ?? null) : null;
+        // Single-pass search for the requested field
+        foreach ($this->cachedFormsData as $form) {
+            if (!is_array($form)) {
+                continue;
+            }
+
+            $children = $form['children'] ?? null;
             if (!is_array($children)) {
                 continue;
             }
 
             foreach ($children as $child) {
-                $fieldName = is_array($child) ? ($child['name'] ?? null) : null;
+                if (!is_array($child)) {
+                    continue;
+                }
+
+                $fieldName = $child['name'] ?? null;
                 if (!is_string($fieldName)) {
                     continue;
                 }
 
-                $this->formFieldErrorIndex[$fieldName] ??= [];
+                // Only process errors if this is a new field we haven't seen
+                if (!isset($this->formFieldErrorIndex[$fieldName])) {
+                    $this->formFieldErrorIndex[$fieldName] = [];
 
-                $errors = is_array($child['errors'] ?? null) ? $child['errors'] : [];
-                foreach ($errors as $error) {
-                    if (is_array($error) && isset($error['message']) && is_string($error['message'])) {
-                        $this->formFieldErrorIndex[$fieldName][] = $error['message'];
+                    $errors = $child['errors'] ?? [];
+                    if (is_array($errors)) {
+                        // Direct assignment instead of loop when possible
+                        foreach ($errors as $error) {
+                            if (is_array($error) && isset($error['message']) && is_string($error['message'])) {
+                                $this->formFieldErrorIndex[$fieldName][] = $error['message'];
+                            }
+                        }
                     }
+                }
+
+                // Early exit if we found the field we're looking for
+                if ($fieldName === $field) {
+                    return;
                 }
             }
         }
