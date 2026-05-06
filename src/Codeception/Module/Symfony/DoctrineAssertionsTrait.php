@@ -44,12 +44,12 @@ trait DoctrineAssertionsTrait
      * $I->grabRepository(UserRepositoryInterface::class); // interface
      * ```
      *
-     * @param  object|class-string $mixed
+     * @param  object|class-string $entityOrClass
      * @return EntityRepository<object>
      */
-    public function grabRepository(object|string $mixed): EntityRepository
+    public function grabRepository(object|string $entityOrClass): EntityRepository
     {
-        $id = is_object($mixed) ? $mixed::class : $mixed;
+        $id = is_object($entityOrClass) ? $entityOrClass::class : $entityOrClass;
 
         if (interface_exists($id) || is_subclass_of($id, EntityRepository::class)) {
             $repo = $this->grabService($id);

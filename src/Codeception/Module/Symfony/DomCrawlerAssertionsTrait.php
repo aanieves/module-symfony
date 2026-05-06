@@ -6,10 +6,11 @@ namespace Codeception\Module\Symfony;
 
 use PHPUnit\Framework\Constraint\Constraint;
 use PHPUnit\Framework\Constraint\LogicalNot;
-use Symfony\Component\DomCrawler\Test\Constraint\CrawlerSelectorAttributeValueSame;
 use Symfony\Component\DomCrawler\Test\Constraint\CrawlerSelectorExists;
 use Symfony\Component\DomCrawler\Test\Constraint\CrawlerSelectorTextContains;
 use Symfony\Component\DomCrawler\Test\Constraint\CrawlerSelectorTextSame;
+
+use function sprintf;
 
 trait DomCrawlerAssertionsTrait
 {
@@ -172,11 +173,17 @@ trait DomCrawlerAssertionsTrait
 
     private function assertInputValue(string $fieldName, string $value, bool $same, string $message): void
     {
-        $this->assertThatCrawler(new CrawlerSelectorExists("input[name=\"$fieldName\"]"), $message);
-        $constraint = new CrawlerSelectorAttributeValueSame("input[name=\"$fieldName\"]", 'value', $value);
-        if (!$same) {
-            $constraint = new LogicalNot($constraint);
+        $selector = "input[name=\"$fieldName\"]";
+        $field = $this->getClient()->getCrawler()->filter($selector);
+        $this->assertGreaterThan(0, $field->count(), $message ?: sprintf('Input "%s" not found.', $selector));
+
+        $actualValue = $field->first()->attr('value');
+        $context = $message ?: sprintf('Value of input "%s"', $fieldName);
+        if ($same) {
+            $this->assertSame($value, $actualValue, $context);
+            return;
         }
-        $this->assertThatCrawler($constraint, $message);
+
+        $this->assertNotSame($value, $actualValue, $context);
     }
 }

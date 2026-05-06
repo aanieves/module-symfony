@@ -97,8 +97,9 @@ trait HttpClientAssertionsTrait
         array $expectedHeaders = []
     ): bool {
         $expectedHeadersLower = $expectedHeaders === [] ? [] : array_change_key_case($expectedHeaders);
+        $traces = $this->getHttpClientTraces($httpClientId, $function);
 
-        foreach ($this->getHttpClientTraces($httpClientId, $function) as $trace) {
+        foreach ($traces as $trace) {
             if (!is_array($trace) || ($trace['method'] ?? null) !== $expectedMethod) {
                 continue;
             }
@@ -124,7 +125,11 @@ trait HttpClientAssertionsTrait
             }
 
             $actualHeaders = $this->extractValue($options['headers'] ?? []);
-            if (is_array($actualHeaders) && $expectedHeadersLower === array_intersect_key(array_change_key_case($actualHeaders), $expectedHeadersLower)) {
+            if (!is_array($actualHeaders)) {
+                continue;
+            }
+
+            if ($expectedHeadersLower === array_intersect_key(array_change_key_case($actualHeaders), $expectedHeadersLower)) {
                 return true;
             }
         }

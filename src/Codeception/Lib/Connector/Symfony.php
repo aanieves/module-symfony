@@ -14,6 +14,8 @@ use Symfony\Component\HttpKernel\KernelInterface;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 
 use function function_exists;
+use function is_array;
+use function property_exists;
 
 /**
  * @property KernelInterface $kernel
@@ -69,12 +71,16 @@ class Symfony extends HttpKernelBrowser
         $this->container = $this->resolveContainer();
 
         foreach ($this->persistentServices as $name => $service) {
-            try {
-                $this->container->set($name, $service);
-            } catch (InvalidArgumentException $e) {
-                if (function_exists('codecept_debug')) {
-                    codecept_debug("[Symfony] Can't set persistent service {$name}: {$e->getMessage()}");
+            if ($this->container->has($name)) {
+                try {
+                    $this->container->set($name, $service);
+                } catch (InvalidArgumentException $e) {
+                    if (function_exists('codecept_debug')) {
+                        codecept_debug("[Symfony] Can't set persistent service {$name}: {$e->getMessage()}");
+                    }
                 }
+            } elseif (function_exists('codecept_debug')) {
+                codecept_debug("[Symfony] Persistent service {$name} not found in container after reboot.");
             }
         }
 

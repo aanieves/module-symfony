@@ -88,19 +88,19 @@ trait ValidatorAssertionsTrait
     protected function getViolationsForSubject(object $subject, ?string $propertyPath = null, ?string $constraint = null): array
     {
         $validator = $this->getValidatorService();
-        $violations = $propertyPath ? $validator->validateProperty($subject, $propertyPath) : $validator->validate($subject);
+        $violations = $propertyPath !== null ? $validator->validateProperty($subject, $propertyPath) : $validator->validate($subject);
 
-        $violations = iterator_to_array($violations);
+        $violations = iterator_to_array($violations, false);
 
-        if ($constraint !== null) {
-            return (array) array_filter(
-                $violations,
-                static fn(ConstraintViolationInterface $violation): bool => $violation->getConstraint() !== null
-                    && $violation->getConstraint()::class === $constraint
-            );
+        if ($constraint === null) {
+            return $violations;
         }
 
-        return $violations;
+        return array_filter(
+            $violations,
+            static fn(ConstraintViolationInterface $violation): bool => $violation->getConstraint() !== null
+                && $violation->getConstraint()::class === $constraint
+        );
     }
 
     protected function getValidatorService(): ValidatorInterface
