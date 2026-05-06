@@ -8,7 +8,6 @@ use PHPUnit\Framework\Assert;
 use Symfony\Component\Form\Extension\DataCollector\FormDataCollector;
 use Symfony\Component\VarDumper\Cloner\Data;
 
-use function count;
 use function implode;
 use function is_array;
 use function is_int;
@@ -29,7 +28,7 @@ trait FormAssertionsTrait
     public function assertFormValue(string $formSelector, string $fieldName, string $value, string $message = ''): void
     {
         $node = $this->getClient()->getCrawler()->filter($formSelector);
-        $this->assertGreaterThan(0, count($node), sprintf('Form "%s" not found.', $formSelector));
+        $this->assertGreaterThan(0, $node->count(), sprintf('Form "%s" not found.', $formSelector));
 
         $values = $node->form()->getValues();
         $this->assertArrayHasKey(
@@ -51,7 +50,7 @@ trait FormAssertionsTrait
     public function assertNoFormValue(string $formSelector, string $fieldName, string $message = ''): void
     {
         $node = $this->getClient()->getCrawler()->filter($formSelector);
-        $this->assertGreaterThan(0, count($node), sprintf('Form "%s" not found.', $formSelector));
+        $this->assertGreaterThan(0, $node->count(), sprintf('Form "%s" not found.', $formSelector));
 
         $values = $node->form()->getValues();
         $this->assertArrayNotHasKey(
@@ -182,23 +181,30 @@ trait FormAssertionsTrait
             return [];
         }
 
-        $errorsForField = [];
+        $errors = [];
         $fieldFound = false;
 
         foreach ($formsData as $form) {
-            if (!is_array($form) || !isset($form['children']) || !is_array($form['children'])) {
+            if (!is_array($form)) {
                 continue;
             }
 
-            foreach ($form['children'] as $child) {
+            $children = $form['children'] ?? null;
+            if (!is_array($children)) {
+                continue;
+            }
+
+            foreach ($children as $child) {
                 if (!is_array($child) || ($child['name'] ?? null) !== $field) {
                     continue;
                 }
+
                 $fieldFound = true;
-                if (isset($child['errors']) && is_array($child['errors'])) {
-                    foreach ($child['errors'] as $error) {
+                $childErrors = $child['errors'] ?? [];
+                if (is_array($childErrors)) {
+                    foreach ($childErrors as $error) {
                         if (is_array($error) && isset($error['message']) && is_string($error['message'])) {
-                            $errorsForField[] = $error['message'];
+                            $errors[] = $error['message'];
                         }
                     }
                 }
@@ -209,7 +215,7 @@ trait FormAssertionsTrait
             Assert::fail("The field '{$field}' does not exist in the form.");
         }
 
-        return $errorsForField;
+        return $errors;
     }
 
     /** @return array<string, mixed> */

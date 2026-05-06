@@ -35,7 +35,7 @@ trait LoggerAssertionsTrait
 
         /** @var array<string, mixed> $log */
         foreach ($logs as $log) {
-            if (!isset($log['type']) || $log['type'] !== 'deprecation') {
+            if (($log['type'] ?? null) !== 'deprecation') {
                 continue;
             }
             $msg = $log['message'];
@@ -48,7 +48,7 @@ trait LoggerAssertionsTrait
             $foundDeprecations[] = (string) $msg;
         }
         $count = count($foundDeprecations);
-        $errorMessage = $message ?: sprintf(
+        $errorMessage = $message !== '' ? $message : sprintf(
             "Found %d deprecation message%s in the log:\n%s",
             $count,
             $count !== 1 ? 's' : '',
